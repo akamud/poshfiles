@@ -95,3 +95,20 @@ function color ($lexer='javascript') {
     $_" }
     End { $t | pygmentize.exe -l $lexer -O style=vs -f console16m; }
 } # call like: docker inspect foo | color
+
+function netstatx
+{
+    netstat -ano | Where-Object{$_ -match 'LISTENING|UDP'} | ForEach-Object{
+        $split = $_.Trim() -split "\s+"
+        New-Object -Type pscustomobject -Property @{
+            "Proto" = $split[0]
+            "Local Address" = $split[1]
+            "Foreign Address" = $split[2]
+            # Some might not have a state. Check to see if the last element is a number. If it is ignore it
+            "State" = if($split[3] -notmatch "\d+"){$split[3]}else{""}
+            # The last element in every case will be a PID
+            "Process Id" = $split[-1]
+            "Process Name" = $(Get-Process -ErrorVariable a -ErrorAction SilentlyContinue -Id $split[-1] ).ProcessName
+        }
+    }  | Format-Table -Property Proto,"Local Address","Foreign Address",State,"Process Id","Process Name" -AutoSize
+}
