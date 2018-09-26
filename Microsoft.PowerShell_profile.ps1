@@ -2,33 +2,8 @@ $root = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
 if (Test-Path "$env:ProgramFiles\Git\usr\bin") { #enable ssh-agent from posh-git
     $env:path="$env:path;$env:ProgramFiles\Git\usr\bin"
 }
-if (Test-Path "$root\Modules\psake") { #enable ssh-agent from posh-git
-    $env:path="$env:path;$root\Modules\psake"
-}
 . $root\Modules\posh-git\profile.example.ps1
 Import-Module z
-Import-Module psake
-Import-Module $root\Modules\posh-docker\posh-docker\posh-docker.psm1
-
-#psake expansion
-Push-Location $root
-. ./PsakeTabExpansion.ps1
-Pop-Location
-if((Test-Path Function:\TabExpansion) -and (-not (Test-Path Function:\DefaultTabExpansion))) {
-    Rename-Item Function:\TabExpansion DefaultTabExpansion
-}
-# Set up tab expansion and include psake expansion
-function TabExpansion($line, $lastWord) {
-    $lastBlock = [regex]::Split($line, '[|;]')[-1]
-    
-    switch -regex ($lastBlock) {
-        # Execute psake tab completion for all psake-related commands
-        '(Invoke-psake|psake) (.*)' { PsakeTabExpansion $lastBlock }
-        # Fall back on existing tab expansion
-        default { DefaultTabExpansion $line $lastWord }
-    }
-}
-#end of psake expansion
 
 #aliases:
 Set-Alias pester invoke-pester
@@ -57,6 +32,9 @@ Add-Alias l 'ls'
 Add-Alias ll 'ls -Force'
 Add-Alias gitbash '. "C:\Program Files\Git\usr\bin\bash.exe"'
 Add-Alias ccat "pygmentize.exe -g -O style=vs -f console16m"
+Add-Alias efadd 'dotnet ef migrations add -s ..\Icatu.IdentityServer\Icatu.IdentityServer.csproj -c ApplicationDbContext $args'
+Add-Alias efrem 'dotnet ef migrations remove -s ..\Icatu.IdentityServer\Icatu.IdentityServer.csproj -c ApplicationDbContext'
+Add-Alias sln 'Invoke-Item *.sln'
 
 function time() {
     $sw = [Diagnostics.Stopwatch]::StartNew()
@@ -69,7 +47,6 @@ $ChocolateyProfile = "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
 if (Test-Path($ChocolateyProfile)) {
   Import-Module "$ChocolateyProfile"
 }
-Set-PSReadlineOption -EditMode Vi
 
 #log history
 $historyFilePath = Join-Path ([Environment]::GetFolderPath('UserProfile')) .ps_history
@@ -96,6 +73,17 @@ function color ($lexer='javascript') {
     End { $t | pygmentize.exe -l $lexer -O style=vs -f console16m; }
 } # call like: docker inspect foo | color
 
+# PowerShell parameter completion shim for the dotnet CLI 
+Register-ArgumentCompleter -Native -CommandName dotnet -ScriptBlock {
+    param($commandName, $wordToComplete, $cursorPosition)
+        dotnet complete --position $cursorPosition "$wordToComplete" | ForEach-Object {
+           [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+        }
+}
+
+Set-PSReadlineKeyHandler -Chord UpArrow -Function HistorySearchBackward
+Set-PSReadlineKeyHandler -Chord DownArrow -Function HistorySearchForward
+
 function netstatx
 {
     netstat -ano | Where-Object{$_ -match 'LISTENING|UDP'} | ForEach-Object{
@@ -112,3 +100,43 @@ function netstatx
         }
     }  | Format-Table -Property Proto,"Local Address","Foreign Address",State,"Process Id","Process Name" -AutoSize
 }
+
+$env:COMPOSE_CONVERT_WINDOWS_PATHS=1
+# # Helper function to change directory to my development workspace
+# # Change c:\ws to your usual workspace and everytime you type
+# # in cws from PowerShell it will take you directly there.
+# function cws { Set-Location c:\ws }
+# # Helper function to set location to the User Profile directory
+# function cuserprofile { Set-Location ~ }
+# Set-Alias ~ cuserprofile -Option AllScope
+# # Helper function to show Unicode character
+# function U
+# {
+#     param
+#     (
+#         [int] $Code
+#     )
+ 
+#     if ((0 -le $Code) -and ($Code -le 0xFFFF))
+#     {
+#         return [char] $Code
+#     }
+ 
+#     if ((0x10000 -le $Code) -and ($Code -le 0x10FFFF))
+#     {
+#         return [char]::ConvertFromUtf32($Code)
+#     }
+ 
+#     throw "Invalid character code $Code"
+# }
+# # Ensure posh-git is loaded
+# Import-Module -Name posh-git
+# # Start SshAgent if not already
+# # Need this if you are using github as your remote git repository
+# if (! (ps | ? { $_.Name -eq 'ssh-agent'})) {
+#     Start-SshAgent
+# }
+# # Ensure oh-my-posh is loaded
+# Import-Module -Name oh-my-posh
+# # Default the prompt to agnoster oh-my-posh theme
+# Set-Theme Honukai
